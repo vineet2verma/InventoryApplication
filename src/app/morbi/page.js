@@ -1,0 +1,664 @@
+"use client";
+import { useEffect, useState } from "react";
+import moment from "moment";
+import { useRouter } from "next/navigation";
+import { Pencil, Trash2, PackagePlus, House } from "lucide-react";
+import { LoginUserFunc } from "../context/loginuser";
+import LoadingSpinner from "../components/waiting";
+import Combobox from "../components/combobox_morbi";
+
+export const dynamic = "force-dynamic"; // This page should always be revalidated
+
+export default function MorbiOrderPage() {
+  const router = useRouter();
+  const { user } = LoginUserFunc();
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [rightread, setrightread] = useState(false);
+  const [rightcreate, setrightcreate] = useState(false);
+  const [rightedit, setrightedit] = useState(false);
+  const [rightdelete, setrightdelete] = useState(false);
+
+  const [orders, setOrders] = useState([]);
+  const [finalfilter, setfinalfilter] = useState([]);
+  const [showfilter, setshowfilter] = useState(false);
+  const [sizearray, setsizearray] = useState([]);
+  const [formData, setFormData] = useState({
+    date: moment().format("YYYY-MM-DD"),
+    tilename: "",
+    coname: "",
+    size: "",
+    qty: "",
+    customername: "",
+    location: "",
+    salesman: user.user?.name,
+    orderconfirmation: "Yes",
+    salesmanremarks: "",
+    availability: "",
+    readydate: "",
+    deliverydate: "",
+    remarks: "",
+  });
+  const [editingId, setEditingId] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modal1Open, setModal1Open] = useState(false);
+  const [modal2open, setmodal2open] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [action, setaction] = useState({});
+  const [filters, setFilters] = useState({
+    tilename: "",
+    coname: "",
+    size: "",
+    customername: "",
+    salesman: "",
+    orderconfirmation: "",
+    availability: "",
+    // readydate: "",
+    // deliverydate: "",
+  });
+
+  const fetchOrders = async () => {
+    const res = await fetch("/api/morbi");
+    const data = await res.json();
+    setOrders(data);
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  useEffect(() => {
+    setrightread(user.user?.pmorbi.includes("read"));
+    setrightcreate(user.user?.pmorbi.includes("create"));
+    setrightedit(user.user?.pmorbi.includes("update"));
+    setrightdelete(user.user?.pmorbi.includes("delete"));
+  }, [user]);
+
+  useEffect(() => {
+    const filteredOrders = orders.filter((order) =>
+      Object.entries(filters).every(([key, value]) =>
+        value
+          ? order[key]?.toString().toLowerCase().includes(value.toLowerCase())
+          : true
+      )
+    );
+    setfinalfilter(filteredOrders);
+  }, [filters, orders]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handle2Change = (e) => {
+    const { name, value } = e.target;
+    setaction((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleOpen2modal = (
+    id,
+    availability,
+    readydate,
+    deliverydate,
+    remarks
+  ) => {
+    setaction({ id, availability, readydate, deliverydate, remarks });
+    setmodal2open(true);
+  };
+
+  const handle2Submit = async (e) => {
+    e.preventDefault();
+    let newfilter = finalfilter.map((x) =>
+      x._id === action.id
+        ? {
+          ...x,
+          availability: action.availability,
+          readydate: action.readydate,
+          deliverydate: action.deliverydate,
+          remarks: action.remarks,
+        }
+        : x
+    );
+    setfinalfilter(newfilter);
+    let toupdate = newfilter.find((x) => x._id === action.id);
+    const res = await fetch("/api/morbi/morbiaction", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(toupdate),
+    });
+    const dt = await res.json();
+    if (!dt.message) alert(dt.error);
+    else alert(dt.message);
+    setmodal2open(false);
+    fetchOrders();
+  };
+
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const showToast = (message, type = "success") => {
+
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 5000);
+  };
+
+  const handleNewOrder = (modalno) => {
+    setFormData({
+      date: moment().format("YYYY-MM-DD"),
+      tilename: "",
+      coname: "",
+      size: "",
+      qty: "",
+      customername: "",
+      location: "",
+      salesman: user.user?.name,
+      orderconfirmation: "Yes",
+      salesmanremarks: "",
+      availability: "",
+      readydate: "",
+      deliverydate: "",
+      remarks: "",
+    });
+    modalno == "1" ? setModal1Open(true) : setModalOpen(true);
+    // setModalOpen(true);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (submitting) return; // Prevent double-click
+    setSubmitting(true); // Start submitting
+    const method = editingId ? "PUT" : "POST";
+    await fetch("/api/morbi", {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    });
+    await fetchOrders();
+    showToast(editingId ? "Order updated" : "Order created");
+    setFormData({
+      date: moment().format("YYYY-MM-DD"),
+      tilename: "",
+      coname: "",
+      size: "",
+      qty: "",
+      customername: "",
+      location: "",
+      salesman: "",
+      orderconfirmation: "",
+      salesmanremarks: user.user?.name,
+      availability: "",
+      readydate: "",
+      deliverydate: "",
+      remarks: "",
+    });
+    setEditingId(null);
+    setModalOpen(false);
+    setModal1Open(false);
+    setSubmitting(false); // Done submitting
+  };
+
+  const handleEdit = (order) => {
+    setFormData({
+      ...order,
+      date: moment(order.date).format("YYYY-MM-DD"),
+      readydate: order.readydate
+        ? moment(order.readydate).format("YYYY-MM-DD")
+        : "",
+      deliverydate: order.deliverydate
+        ? moment(order.deliverydate).format("YYYY-MM-DD")
+        : "",
+    });
+    setEditingId(order._id);
+    setModalOpen(true);
+  };
+
+  const handleDelete = async (id) => {
+    await fetch("/api/morbi", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    fetchOrders();
+    showToast("Order deleted", "error");
+  };
+
+  return (
+    <>
+      {rightread && (
+        <div className="p-4 max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2  ">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="flex gap-2 items-center text-xs  px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition"
+            >
+              <House className="w-6 h-5 " />
+              Home
+            </button>
+
+            <h1 className="text-center md:text-left text-2xl font-bold   ">
+              Morbi Order Management
+            </h1>
+
+            <div className={rightcreate ? "grid grid-cols-1 md:grid-cols-3 gap-2  " : "grid grid-cols-3 gap-2 rounded-xl  "}>
+              <button
+                className="bg-blue-600 text-white text-xs px-4 py-2 rounded hover:bg-blue-700 w-full sm:w-auto"
+                onClick={() => {
+                  showfilter ? setshowfilter(false) : setshowfilter(true);
+                }}
+              >
+                {showfilter ? "Hide Filter" : "Show Filter"}
+              </button>
+              {rightcreate && (
+                <button
+                  onClick={() => handleNewOrder(0)}
+                  className="bg-blue-600 text-white text-xs px-4 py-2 rounded hover:bg-blue-700 w-full sm:w-auto"
+                >
+                  + Design Mast
+                </button>
+              )}
+              {rightcreate && (
+                <button
+                onClick={() => handleNewOrder(1)}
+                className="bg-blue-600 text-white text-xs px-4 py-2 rounded hover:bg-blue-700 w-full sm:w-auto"
+              >
+                + New Order
+              </button>
+              )}
+            </div>
+          </div>
+
+          {showfilter && (
+            <div className="my-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              {Object.keys(filters).map((key) => (
+                <div key={key}>
+                  <label className="block text-sm font-medium capitalize mb-1">
+                    Filter by {key}
+                  </label>
+                  <input
+                    type="text"
+                    name={key}
+                    value={filters[key]}
+                    onChange={handleFilterChange}
+                    className="border p-2 rounded w-full"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {toast && (
+            <div
+              className={`p-2 rounded text-white ${toast.type === "error" ? "bg-red-500" : "bg-green-500"
+                }`}
+            >
+              {toast.message}
+            </div>
+          )}
+
+          {modalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start pt-10 z-50 overflow-y-auto">
+              <div className="bg-white p-6 rounded shadow-lg w-[95%] sm:w-[90%] max-w-4xl relative">
+                <button
+                  onClick={() => {
+                    setModalOpen(false);
+                    setEditingId(null);
+                  }}
+                  className="absolute top-2 right-2 text-red-600 font-extrabold size-10 hover:text-red"
+                >
+                  ✕
+                </button>
+                <h2 className="text-lg font-bold mb-4">
+                  {editingId ? "Edit" : "New"} Order
+                </h2>
+                <form
+                  onSubmit={handleSubmit}
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                >
+                  {['tilename', 'coname', 'size', 'qty', 'customername', 'location', 'salesman'].map((key) =>
+                  (
+                    <div key={key}>
+                      <label className="block text-sm font-medium capitalize">
+                        {key}
+                      </label>
+                      {key == "tilename" ? (
+                        <Combobox formData={formData} setFormData={setFormData} setsizearray={setsizearray} />
+                      ) : key == "coname" ? (
+                        <input
+                          type="text"
+                          name={key}
+                          value={formData[key]}
+                          onChange={handleChange}
+                          required
+                          className="mt-1 p-2 border w-full rounded"
+                        />
+                      ) : key == "size" ? (
+                        <select
+                          name={key}
+                          onChange={handleChange}
+                        >
+                          <option value="">Select Size</option>
+                          {sizearray.map((size, index) => (
+                            <option key={index} value={size}>
+                              {size}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type={key.includes("date") ? "date" : "text"}
+                          name={key}
+                          value={formData[key]}
+                          onChange={handleChange}
+                          required
+                          // required={
+                          //   key !== "salesmanremarks" &&
+                          //   key !== "orderconfirmation"
+                          // }
+                          className="mt-1 p-2 border w-full rounded"
+                        />
+                      )}
+                    </div>
+                  ))}
+                  <div className="col-span-1 sm:col-span-2">
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full sm:w-auto"
+                    >
+                      {editingId ? "Update" : "Create"} Order
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {modal1Open && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start pt-10 z-50 overflow-y-auto">
+              <div className="bg-white p-6 rounded shadow-lg w-[95%] sm:w-[90%] max-w-4xl relative">
+                <button
+                  onClick={() => {
+                    setModal1Open(false);
+                    setEditingId(null);
+                  }}
+                  className="absolute top-2 right-2 text-red-600 font-extrabold size-10 hover:text-red"
+                >
+                  ✕
+                </button>
+                <h2 className="text-lg font-bold mb-4">
+                  {editingId ? "Edit" : "New"} Order
+                </h2>
+                <form
+                  onSubmit={handleSubmit}
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                >
+                  {Object.keys(formData).map((key) =>
+                    key != "_id" &&
+                      key != "createdAt" &&
+                      key != "updatedAt" &&
+                      key != "__v" &&
+                      key != "availability" &&
+                      key != "readydate" &&
+                      key != "deliverydate" &&
+                      key != "salesman" &&
+                      key != "remarks" ? (
+                      <div key={key}>
+                        <label className="block text-sm font-medium capitalize">
+                          {key}
+                        </label>
+                        {key == "orderconfirmation" ? (
+                          <select
+                            type="text"
+                            name={key}
+                            value={formData[key]}
+                            onChange={handleChange}
+                            className="mt-1 p-2 border w-full rounded"
+                          >
+                            <option value="Yes">Yes</option>
+                            <option value="No">No</option>
+                            <option value="Cancel">Cancel</option>
+                          </select>
+                        ) : (
+                          <input
+                            type={key.includes("date") ? "date" : "text"}
+                            name={key}
+                            value={formData[key]}
+                            onChange={handleChange}
+                            required={
+                              key !== "salesmanremarks" &&
+                              key !== "coname" &&
+                              key !== "orderconfirmation"
+                            }
+                            className="mt-1 p-2 border w-full rounded"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      ""
+                    )
+                  )}
+                  <div className="col-span-1 sm:col-span-2">
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full sm:w-auto"
+                    >
+                      {editingId ? "Update" : "Create"} Order
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {modal2open && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center text-center items-start pt-10 z-50 overflow-y-auto">
+              <div className="bg-white px-6 py-2 rounded shadow-lg w-[95%] sm:w-[30%] relative">
+                <button
+                  onClick={() => {
+                    setmodal2open(false);
+                  }}
+                  className="absolute top-2 right-4 font-extrabold text-red-600 hover:text-red"
+                >
+                  ✕
+                </button>
+                <h2 className="text-lg font-bold mb-4">Action Form</h2>
+                <form
+                  onSubmit={handle2Submit}
+                  className="grid grid-cols-1 gap-y-10"
+                >
+                  <div>
+                    <label className="block text-sm my-2 font-medium capitalize">
+                      Availability
+                    </label>
+                    <select
+                      type="text"
+                      name="availability"
+                      value={action.availability}
+                      onChange={handle2Change}
+                      className="mt-1 p-2 my-2 border w-full rounded"
+                    >
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                      <option value="Cancel">Cancel</option>
+                    </select>
+                    <label className="block text-sm my-2 font-medium capitalize">
+                      Ready Date
+                    </label>
+                    <input
+                      type="date"
+                      name="readydate"
+                      value={action.readydate}
+                      onChange={handle2Change}
+                      required
+                      className="mt-1 p-2 my-2 border w-full rounded"
+                    />
+                    {/* <label className="block text-sm font-medium capitalize">
+                  Delivery Date
+                </label>
+                <input
+                  type="date"
+                  name="deliverydate"
+                  value={action.deliverydate}
+                  onChange={handle2Change}
+                  required
+                  className="mt-1 p-2 border w-full rounded"
+                /> */}
+                    <label className="block text-sm my-2 font-medium capitalize">
+                      Remarks
+                    </label>
+                    <input
+                      type="text"
+                      name="remarks"
+                      value={action.remarks}
+                      onChange={handle2Change}
+                      required
+                      className="mt-1 p-2 border w-full rounded"
+                    />
+                  </div>
+
+                  <div className="col-span-1 sm:col-span-2">
+                    <button
+                      type="submit"
+                      onClick={handle2Submit}
+                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 w-full sm:w-auto"
+                    >
+                      Action Form
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* <h2 className="text-xl font-semibold mt-1 mb-0">Order List</h2> */}
+          <div className="overflow-auto max-h-[500px] border mt-2">
+            <table className="w-full border-collapse text-xs border  ">
+              <thead className="overflow-auto  ">
+                <tr className="bg-gray-100 ">
+                  <th className="p-2 border bg-gray-600 text-white  sticky top-0 z-10">
+                    Date
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0 text-wrap">
+                    Tile Name
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0 text-wrap">
+                    Co Name
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0 text-wrap">
+                    Size
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0">
+                    Qty
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0 text-wrap">
+                    Customer
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0 text-wrap">
+                    Location
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0 text-wrap">
+                    Sales Person
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0 text-wrap">
+                    Ord Confirmation
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0 text-wrap ">
+                    Sales Person Remarks
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0">
+                    Availability
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0">
+                    Ready Date
+                  </th>
+                  {/* <th className="p-2 border bg-gray-600 text-white sticky top-0">Delivery Date</th> */}
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0 text-wrap">
+                    Remarks
+                  </th>
+                  <th className="p-2 border bg-gray-600 text-white sticky top-0 text-wrap">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="">
+                {finalfilter.map((order) => (
+                  <tr key={order._id} className="text-center">
+                    <td className="p-2 border">
+                      {moment(order.createdAt).format("DD/MM/YYYY")}
+                    </td>
+                    <td className="p-2 border text-wrap">{order.tilename}</td>
+                    <td className="p-2 border text-wrap">{order.coname}</td>
+                    <td className="p-2 border text-wrap">{order.size}</td>
+                    <td className="p-2 border text-wrap">{order.qty}</td>
+                    <td className="p-2 border text-wrap">
+                      {order.customername}
+                    </td>
+                    <td className="p-2 border text-wrap">{order.location}</td>
+                    <td className="p-2 border text-wrap">{order.salesman}</td>
+                    <td className="p-2 border text-wrap">
+                      {order.orderconfirmation}
+                    </td>
+                    <td className="p-2 border text-wrap">
+                      {order.salesmanremarks}
+                    </td>
+                    <td className="p-2 border text-wrap">
+                      {order.availability}
+                    </td>
+
+                    <td className="p-2 border">
+                      {order.readydate
+                        ? moment(order.readydate).format("DD/MM/YYYY")
+                        : ""}
+                    </td>
+                    {/* <td className="p-2 border">
+                  {order.deliverydate
+                    ? moment(order.deliverydate).format("DD/MM/YYYY")
+                    : ""}
+                </td> */}
+                    <td className="p-2 border text-wrap">{order.remarks}</td>
+                    <td className="border text-wrap px-2 py-3 flex ">
+                      <button
+                        onClick={() => {
+                          handleOpen2modal(
+                            order._id,
+                            order.availability,
+                            order.readydate,
+                            order.deliverydate,
+                            order.remarks
+                          );
+                        }}
+                        className="px-1"
+                      >
+                        <PackagePlus />
+                      </button>
+                      {rightedit
+                        && (<button
+                          onClick={() => handleEdit(order)}
+                          className="px-1 text-green-500 "
+                        >
+                          <Pencil />
+                        </button>)
+                      }
+                      {rightdelete && (
+                        <button
+                          // onClick={()=>{alert(order._id)}}
+                          onClick={() => handleDelete(order._id)}
+                          className="px-1 text-red-600"
+                        >
+                          <Trash2 />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
