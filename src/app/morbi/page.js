@@ -72,6 +72,7 @@ export default function MorbiOrderPage() {
     setrightcreate(user.user?.pmorbi.includes("create"));
     setrightedit(user.user?.pmorbi.includes("update"));
     setrightdelete(user.user?.pmorbi.includes("delete"));
+    console.log(user.user?.role)
   }, [user]);
 
   useEffect(() => {
@@ -584,7 +585,8 @@ export default function MorbiOrderPage() {
                 </tr>
               </thead>
               <tbody className="">
-                {finalfilter.map((order) => (
+            { (user.user.role=="admin"?finalfilter:finalfilter.filter((item)=>item.salesman==user.user?.name)) .map((order) => (
+
                   <tr key={order._id} className="text-center">
                     <td className="p-2 border">
                       {moment(order.createdAt).format("DD/MM/YYYY")}
